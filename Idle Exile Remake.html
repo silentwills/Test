@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Idle Exile Remake</title>
+<style>
+:root{--bg:#f1efe8;--fg:#1d2624;--card:#fbfaf6;--mut:#667470;--acc:#9a6b12;--acc2:#1f5d57;--line:#d5d2c6;--bar:#e3e0d3;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101a19;--fg:#e8e4d6;--card:#172524;--mut:#8fa09b;--acc:#e0b04a;--acc2:#5fb3a8;--line:#2a3d3a;--bar:#223533}}
+:root[data-theme="dark"]{--bg:#101a19;--fg:#e8e4d6;--card:#172524;--mut:#8fa09b;--acc:#e0b04a;--acc2:#5fb3a8;--line:#2a3d3a;--bar:#223533}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 "Iowan Old Style",Georgia,serif}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:28px;margin:0 0 4px;letter-spacing:.01em}
+.m{color:var(--mut);margin:2px 0;font-size:14px}
+.stats{display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 0 14px;font-variant-numeric:tabular-nums}
+.stats b{color:var(--acc)}
+nav{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:14px}
+button{font:inherit;cursor:pointer;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 12px}
+button:hover:not(:disabled){border-color:var(--acc2)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,textarea:focus-visible{outline:2px solid var(--acc2);outline-offset:2px}
+nav button{border:0;border-radius:0;background:none;border-bottom:3px solid transparent;white-space:nowrap}
+nav button.on{border-bottom-color:var(--acc);color:var(--acc)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.bar{height:6px;background:var(--bar);border-radius:3px;margin:8px 0;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--acc2)}
+.btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+textarea{width:100%;height:110px;font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px}
+#msg{min-height:22px;color:var(--acc2);font-size:14px;margin-bottom:6px}
+</style>
+</head>
+<body>
+<main>
+<h1>Idle Exile Remake</h1>
+<p class="m">Recruit exiles, flip currency, delve for fossils and craft for profit. Progress saves automatically.</p>
+<div class="stats">
+<span>Chaos <b id="sc">0</b></span><span>Exalted <b id="se">0</b></span><span>Sulphite <b id="ss">0</b></span>
+<span>Total levels <b id="stl">0</b></span><span>Play time <b id="sp">0:00:00</b></span>
+</div>
+<div id="msg" role="status"></div>
+<nav id="tabs"></nav>
+<section id="panel"></section>
+</main>
+<script>
+const KEY="idle-exile-remake-v1",MAXOFF=28800;
+const EX=[
+{id:"asc",n:"Ascendant",r:0,t:"farm"},{id:"sla",n:"Slayer",r:30,t:"farm"},
+{id:"ass",n:"Assassin",r:70,t:"farm"},{id:"jug",n:"Juggernaut",r:140,t:"farm"},
+{id:"mel",n:"Melvin the Delver",r:100,t:"delve"},{id:"art",n:"The Artificer",r:250,t:"craft"}];
+const FOS=["Aberrant","Frigid","Metallic","Lucent","Prismatic"];
+const CR=[
+{id:"flask",n:"Flask",rc:400,cost:{Aberrant:1},p:25},
+{id:"helm",n:"Resistance Helmet",rc:1500,cost:{Frigid:1,Metallic:1},p:90},
+{id:"wand",n:"+2 Gem Wand",rc:6000,cost:{Lucent:2,Prismatic:1,exalt:1},p:400}];
+const TABS=[["guild","Guild"],["flip","Flipping"],["delve","Delving"],["craft","Crafting"],["save","Save"]];
+const fresh=()=>({v:1,chaos:0,exalt:0,sul:0,depth:1,upg:0,fos:{},ex:{},cr:{},ct:0,auto:false,play:0,saved:Date.now()});
+function load(){try{const r=localStorage.getItem(KEY);return r?Object.assign(fresh(),JSON.parse(r)):null}catch(e){return null}}
+let S=load()||fresh(),tab="guild",held=0,last="",armed=0,lastSaveOk=!!localStorage_ok();
+function localStorage_ok(){try{localStorage.setItem("t","1");localStorage.removeItem("t");return true}catch(e){return false}}
+const need=l=>Math.floor(50*Math.pow(l+1,1.35));
+const mult=()=>1+0.15*S.upg;
+const ucost=()=>Math.floor(60*Math.pow(1.7,S.upg));
+const tl=()=>EX.reduce((a,x)=>a+(S.ex[x.id]?S.ex[x.id].l:0),0);
+const lvl=t=>EX.filter(x=>x.t===t&&S.ex[x.id]).reduce((a,x)=>a+S.ex[x.id].l,0);
+const ivl=()=>30/(1+0.04*lvl("craft"));
+const dcost=()=>20+S.depth*8;
+function fmt(n){if(n>=1e6)return(n/1e6).toFixed(2)+"M";if(n>=1e4)return(n/1e3).toFixed(1)+"k";return(Math.floor(n*10)/10).toLocaleString()}
+function dur(s){s=Math.floor(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h+":"+String(m).padStart(2,"0")+":"+String(s%60).padStart(2,"0")}
+function say(t){document.getElementById("msg").textContent=t}
+function delve(){S.sul-=dcost();const f=FOS[Math.floor(Math.random()*FOS.length)];S.fos[f]=(S.fos[f]||0)+1+Math.floor(S.depth/10);S.chaos+=S.depth*3;S.depth++}
+const canPay=c=>Object.keys(c).every(k=>(k==="exalt"?S.exalt:(S.fos[k]||0))>=c[k]);
+function pay(c){for(const k in c){if(k==="exalt")S.exalt-=c[k];else S.fos[k]-=c[k]}}
+function step(d){
+S.play+=d;const m=mult();
+for(const x of EX){const e=S.ex[x.id];if(!e)continue;e.e+=3*m*d;while(e.e>=need(e.l)){e.e-=need(e.l);e.l++}}
+S.chaos+=lvl("farm")*0.25*m*d;S.sul+=lvl("delve")*0.2*m*d;
+let n=0;while(S.auto&&S.sul>=dcost()&&n++<50)delve();
+S.ct+=d;const iv=ivl();
+while(S.ct>=iv){S.ct-=iv;for(const c of CR){if(S.cr[c.id]!==undefined&&canPay(c.cost)){pay(c.cost);S.chaos+=c.p;S.cr[c.id]++}}}
+}
+function advance(t){while(t>0){const d=Math.min(1,t);step(d);t-=d}}
+function save(quiet){S.saved=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S));lastSaveOk=true;if(!quiet)say("Game saved.")}catch(e){lastSaveOk=false;say("Saving is blocked in this browser. Use Export to keep a backup.")}
+const el=document.getElementById("ls");if(el)el.textContent=lastSaveOk?new Date(S.saved).toLocaleTimeString():"not saved"}
+const enc=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+const dec=s=>JSON.parse(decodeURIComponent(escape(atob(s.trim()))));
+const btn=(a,i,l,dis)=>`<button data-a="${a}" data-i="${i}"${dis?" disabled":""}>${l}</button>`;
+const bar=p=>`<div class="bar"><i style="width:${Math.min(100,p*100).toFixed(1)}%"></i></div>`;
+function pGuild(){const m=mult();
+let h=`<div class="card"><div class="row"><div><b>Theorycrafting</b><p class="m">Efficiency multiplier ×${m.toFixed(2)}</p></div>${btn("upg","","Upgrade +15% for "+fmt(ucost())+" Chaos",S.chaos<ucost())}</div></div>`;
+for(const x of EX){const e=S.ex[x.id];
+if(!e){h+=`<div class="card"><div class="row"><div><b>${x.n}</b><p class="m">Needs ${x.r} total levels</p></div>${btn("rec",x.id,"Recruit",tl()<x.r)}</div></div>`;continue}
+const eff=x.t==="farm"?(e.l*0.25*m).toFixed(2)+" Chaos/s":x.t==="delve"?(e.l*0.2*m).toFixed(2)+" Sulphite/s":"Craft cycle "+ivl().toFixed(1)+"s";
+h+=`<div class="card"><div class="row"><b>${x.n}</b><span class="m">Level ${e.l} · ${eff}</span></div>${bar(e.e/need(e.l))}<span class="m">${fmt(e.e)} / ${fmt(need(e.l))} EXP</span></div>`}
+return h}
+function pFlip(){return`<div class="card"><b>Exalted Orb market</b><p class="m">Buy at 150 Chaos, sell at 125 Chaos.</p>
+<div class="btns">${btn("buy",1,"Buy 1",S.chaos<150)}${btn("buy",10,"Buy 10",S.chaos<1500)}${btn("sell",1,"Sell 1",S.exalt<1)}${btn("sell",10,"Sell 10",S.exalt<10)}${btn("sellall","","Sell all",S.exalt<1)}</div></div>
+<p class="m">Exalted Orbs are also an ingredient for the Gem Wand craft.</p>`}
+function pDelve(){const c=dcost();
+let h=`<div class="card"><div class="row"><b>Depth ${S.depth}</b><span class="m">Sulphite ${fmt(S.sul)} / ${c} needed</span></div>${bar(S.sul/c)}
+<div class="btns">${btn("delve","","Delve deeper",S.sul<c)}${btn("auto","","Auto-delve: "+(S.auto?"on":"off"),false)}</div>
+<p class="m">Each delve gives fossils and ${fmt(S.depth*3)} Chaos. Recruit Melvin to produce Sulphite.</p></div><div class="card"><b>Fossils</b>`;
+for(const f of FOS)h+=`<div class="row"><span>${f}</span><span>${S.fos[f]||0}</span></div>`;
+return h+"</div>"}
+function pCraft(){const iv=ivl();
+let h=`<div class="card"><div class="row"><b>Crafting cycle</b><span class="m">Every ${iv.toFixed(1)}s</span></div>${bar(S.ct/iv)}<p class="m">Researched crafts run automatically and sell for Chaos.</p></div>`;
+for(const c of CR){const r=S.cr[c.id]!==undefined;
+const cs=Object.keys(c.cost).map(k=>c.cost[k]+" "+(k==="exalt"?"Exalted":k)).join(", ");
+h+=`<div class="card"><div class="row"><b>${c.n}</b>${r?`<span class="m">Crafted ${S.cr[c.id]}</span>`:btn("res",c.id,"Research for "+fmt(c.rc)+" Chaos",S.chaos<c.rc)}</div><p class="m">Uses ${cs}. Sells for ${c.p} Chaos.</p></div>`}
+return h}
+function pSave(){return`<div class="card"><b>Save system</b>
+<p class="m">Autosaves every 15 seconds and when you leave the page. Last saved: <span id="ls">${lastSaveOk?new Date(S.saved).toLocaleTimeString():"not saved"}</span>. Progress while away is applied when you return (up to 8 hours).</p>
+<div class="btns">${btn("save","","Save now")}${btn("export","","Export save")}${btn("import","","Import save")}${btn("reset","",armed?"Click again to erase everything":"Reset game")}</div></div>
+<div class="card"><label class="m" for="blob">Export code (copy it to back up) or paste a code here and choose Import.</label><textarea id="blob" spellcheck="false"></textarea></div>`}
+const P={guild:pGuild,flip:pFlip,delve:pDelve,craft:pCraft,save:pSave};
+function render(force){
+document.getElementById("tabs").innerHTML=TABS.map(t=>`<button data-a="tab" data-i="${t[0]}" class="${t[0]===tab?"on":""}">${t[1]}</button>`).join("");
+if(tab==="save"&&!force)return;
+if(held&&!force)return;
+const h=P[tab]();if(h===last&&!force)return;last=h;document.getElementById("panel").innerHTML=h}
+function hdr(){const g=id=>document.getElementById(id);g("sc").textContent=fmt(S.chaos);g("se").textContent=fmt(S.exalt);g("ss").textContent=fmt(S.sul);g("stl").textContent=tl();g("sp").textContent=dur(S.play)}
+function act(a,i){
+if(a!=="reset")armed=0;
+if(a==="tab"){tab=i;last=""}
+else if(a==="upg"&&S.chaos>=ucost()){S.chaos-=ucost();S.upg++}
+else if(a==="rec"){const x=EX.find(v=>v.id===i);if(x&&tl()>=x.r&&!S.ex[i])S.ex[i]={l:0,e:0}}
+else if(a==="buy"){const n=+i;if(S.chaos>=150*n){S.chaos-=150*n;S.exalt+=n}}
+else if(a==="sell"){const n=+i;if(S.exalt>=n){S.exalt-=n;S.chaos+=125*n}}
+else if(a==="sellall"){S.chaos+=125*S.exalt;S.exalt=0}
+else if(a==="delve"&&S.sul>=dcost())delve();
+else if(a==="auto")S.auto=!S.auto;
+else if(a==="res"){const c=CR.find(v=>v.id===i);if(c&&S.chaos>=c.rc&&S.cr[i]===undefined){S.chaos-=c.rc;S.cr[i]=0}}
+else if(a==="save")save();
+else if(a==="export"){save(true);document.getElementById("blob").value=enc(S);say("Export code ready. Copy it somewhere safe.")}
+else if(a==="import"){try{const o=dec(document.getElementById("blob").value);if(!o||typeof o!=="object"||!o.v)throw 0;S=Object.assign(fresh(),o);save(true);say("Save imported.")}catch(e){say("That code is not a valid save.")}}
+else if(a==="reset"){if(!armed){armed=1;setTimeout(()=>{armed=0;if(tab==="save")render(true)},4000)}else{armed=0;S=fresh();try{localStorage.removeItem(KEY)}catch(e){}say("Game reset.")}}
+render(true);hdr()}
+document.addEventListener("click",ev=>{const b=ev.target.closest("[data-a]");if(!b||b.disabled)return;act(b.dataset.a,b.dataset.i)});
+addEventListener("pointerdown",()=>held=1);
+["pointerup","pointercancel"].forEach(e=>addEventListener(e,()=>held=0));
+addEventListener("pagehide",()=>save(true));
+document.addEventListener("visibilitychange",()=>{if(document.hidden)save(true)});
+const off=Math.min((Date.now()-S.saved)/1000,MAXOFF);
+if(off>60){advance(off);say("Welcome back! Applied "+dur(off)+" of offline progress.")}
+let lt=Date.now();
+setInterval(()=>{const n=Date.now();advance(Math.min((n-lt)/1000,MAXOFF));lt=n;hdr();render()},500);
+setInterval(()=>save(true),15000);
+render(true);hdr();
+</script>
+</body>
+</html>
