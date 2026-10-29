@@ -62,7 +62,7 @@ function load(){try{const r=localStorage.getItem(KEY);return r?Object.assign(fre
 let S=load()||fresh(),tab="guild",held=0,last="",armed=0,lastSaveOk=!!localStorage_ok();
 function localStorage_ok(){try{localStorage.setItem("t","1");localStorage.removeItem("t");return true}catch(e){return false}}
 const need=l=>Math.floor(50*Math.pow(l+1,1.35));
-const mult=()=>1+0.15*S.upg;
+const mult=()=>1+0.25*S.upg;
 const ucost=()=>Math.floor(60*Math.pow(1.7,S.upg));
 const tl=()=>EX.reduce((a,x)=>a+(S.ex[x.id]?S.ex[x.id].l:0),0);
 const lvl=t=>EX.filter(x=>x.t===t&&S.ex[x.id]).reduce((a,x)=>a+S.ex[x.id].l,0);
